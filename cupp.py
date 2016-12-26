@@ -42,10 +42,32 @@ import urllib
 import gzip
 import csv
 
+def readGlobalCFG(cuppFolder):
+	#(try to) read global configuration file
+	cuppLocation = cuppFolder  + '/cupp.cfg'
+	if os.path.isfile(cuppLocation):
+		print "\n[+] Using " + cuppLocation + "\n"
+		config.read(cuppLocation)
+	else:
+		print "\n\033[1;31m[-]Could not read global configuration file, create one locally or at:\033[1;m\n\t\t " + cuppLocation + "\n"
+		exit()
 
 # Reading configuration file...
 config = ConfigParser.ConfigParser()
-config.read('cupp.cfg')
+
+#path to cupp folder
+cuppFolder = os.path.dirname(os.path.realpath(__file__))
+if os.path.isfile('cupp.cfg') and os.getcwd() != cuppFolder:
+	x = raw_input('Local configuration file detected. Use it? Y/[N]: ').lower()
+	if x == 'y':
+		print "\n[+] Using " + os.getcwd() + "/cupp.cfg\n"
+		#read local configuration file, if it exists
+		config.read('cupp.cfg')
+	else:
+		readGlobalCFG(cuppFolder)
+		
+else:
+	readGlobalCFG(cuppFolder)
 
 years = config.get('years', 'years').split(',')
 chars = config.get('specialchars', 'chars').split(',')
@@ -110,10 +132,12 @@ if len(sys.argv) < 2 or sys.argv[1] == '-h':
 
 	print "	[ Options ]\r\n"
 	print "	-h	You are looking at it baby! :)"
-	print " 		 For more help take a look in docs/README"
-	print "		 Global configuration file is cupp.cfg\n"
+	print " 		 For more help take a look in "+cuppFolder+"/docs/README"
+	print "		 Global configuration file is "+cuppFolder+"/cupp.cfg"
+	if not( os.path.isfile(cuppFolder+'/cupp.cfg') ):
+		print "		 \033[1;31m"+cuppFolder+"/cupp.cfg is missing\033[1;m"
 
-	print "	-i	Interactive questions for user password profiling\r\n"
+	print "\n	-i	Interactive questions for user password profiling\r\n"
 
 	print "	-w	Use this option to improve existing dictionary,"
 	print "		 or WyD.pl output to make some pwnsauce\r\n"
@@ -129,7 +153,7 @@ elif sys.argv[1] == '-v':
 	print "\r\n	\033[1;31m[ cupp.py ]  v3.1.0-alpha\033[1;m\r\n"
 	print "	* Hacked up by j0rgan - j0rgan@remote-exploit.org"
 	print "	* http://www.remote-exploit.org\r\n"
-	print "	Take a look ./README.md file for more info about the program\r\n"
+	print "	Take a look "+cuppFolder+"/README.md file for more info about the program\r\n"
 	exit()
 
 
@@ -137,7 +161,11 @@ elif sys.argv[1] == '-w':
 	if len(sys.argv) < 3:
 		print "\r\n[Usage]:	"+sys.argv[0]+"  -w  [FILENAME]\r\n"
 		exit()
-	fajl = open(sys.argv[2], "r")
+	arg2 = sys.argv[2]
+	if not os.path.isfile(arg2):
+		print "File "+arg2+" does not exist"
+		exit()
+	fajl = open(arg2, "r")
 	listic = fajl.readlines()
 	linije = 0
 	for line in listic:
@@ -264,12 +292,12 @@ elif sys.argv[1] == '-i':
 
 	print "\r\n"
 
-	wife = raw_input("> Partners) name: ").lower()
-	wifen = raw_input("> Partners) nickname: ").lower()
-	wifeb = raw_input("> Partners) birthdate (DDMMYYYY): ")
+	wife = raw_input("> Partner's name: ").lower()
+	wifen = raw_input("> Partner's nickname: ").lower()
+	wifeb = raw_input("> Partner's birthdate (DDMMYYYY): ")
 	while len(wifeb) != 0 and len(wifeb) != 8:
 		print "\r\n[-] You must enter 8 digits for birthday!"
-		wifeb = raw_input("> Partners birthdate (DDMMYYYY): ")
+		wifeb = raw_input("> Partner's birthdate (DDMMYYYY): ")
 	wifeb = str(wifeb)
 	print "\r\n"
 
