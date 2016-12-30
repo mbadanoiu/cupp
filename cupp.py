@@ -41,6 +41,8 @@ import ConfigParser
 import urllib
 import gzip
 import csv
+import itertools
+import math
 
 def readGlobalCFG(cuppFolder):
 	#(try to) read global configuration file
@@ -121,6 +123,168 @@ def print_to_file(filename, unique_list_finished):
 	print "[+] Saving dictionary to \033[1;31m"+filename+"\033[1;m, counting \033[1;31m"+str(lines)+" words.\033[1;m"
 	print "[+] Now load your pistolero with \033[1;31m"+filename+"\033[1;m and shoot! Good luck!"
 
+#computes rough percentage of permutations which are: wcfrom < len(permutations) > wcto
+def percentage(lenArr, lenDelim, realAverage, x, lBound, uBound):
+	length = len(lenArr)
+	if x == length:
+		if sum(lenArr) > uBound:
+			return 0
+	lenArr.sort()
+	smallest = lenArr[0]
+	biggest = lenArr[length - 1]
+	if smallest == biggest:
+		if smallest * x > lBound and smallest * x < uBound:
+			return 1
+		else:
+			return 0
+	elif smallest >= uBound:
+		return 0
+	else:
+		smallA = 0
+		bigA = 0
+		for i in range(x):
+			smallA += lenArr[i]
+			bigA += lenArr[length - 1 - i]
+		if smallA >= uBound:
+			return 0
+		else:
+			lengthD = len(lenDelim)
+			if lengthD >= 1:
+				lenDelim.sort()
+				smallD = lenDelim[0]
+				bigD = lenDelim[lengthD - 1]
+			else:
+				smallD = 0
+				bigD = 0
+			xs = smallA + smallD * (x - 1)
+			xa = math.floor(x * realAverage + float(sum(lenDelim)) / lengthD)
+			xb = bigA + bigD * (x - 1)
+			if xs >= uBound or xb <= lBound:
+				return 0
+			elif xs > lBound and xb < uBound:
+				return 1
+			else:
+				bPercent = float(xa - xs) / (xb - xs)
+				aPercent = float(xb - xa) / (xb - xs)
+				if bPercent > aPercent:
+					temp = bPercent
+					bPercent = aPercent
+					aPercent = temp
+				if xs <= lBound and xa >= uBound:
+					return bPercent
+				elif xa <= lBound and xb >= uBound:
+					return aPercent
+				else:
+					if xs >= lBound and xa <= uBound:
+						bPart = float(xa - xs) / (uBound - lBound) * bPercent
+					elif xa <= lBound:
+						bPart = 0
+					elif xs >= lBound and xa >= uBound:
+						bPart = float(uBound - xs) / (uBound - lBound) * bPercent
+					else:
+						bPart = float(xa - lBound) / (uBound - lBound) * bPercent
+					if xa >= lBound and xb <= uBound:
+						aPart = float(xb - xa) / (uBound - lBound) * aPercent
+					elif xa >= uBound:
+						aPart = 0
+					elif xa <= lBound and xb <= uBound:
+						aPart = float(xb - lBound) / (uBound - lBound) * aPercent
+					else:
+						aPart = float(uBound - xa) / (uBound - lBound) * aPercent
+					return bPart + aPart
+
+#warns the user how much aditional memory the permutations will consume/need
+def computePermutationMemory(array, elements, delimiters, lowBound, upBound):
+	mem = 0
+	permNo = 0
+	wordNo = len(array)
+	lengthArray = [ len(a) for a in array ]
+	letterAvg = float(sum(lengthArray)) / float(wordNo)
+	delimNo = len(delimiters)
+	lengthDelim = [ len(d) for d in delimiters ]
+	delimAvg = float(sum( lengthDelim )) / float(delimNo)
+	for i in elements:
+		x = 1
+		perm = wordNo
+		while x < i:
+			perm *= wordNo - x
+			x += 1
+		validPercentage = percentage(lengthArray, lengthDelim, letterAvg, i, lowBound, upBound)
+		boundedPermutations = perm * validPercentage
+		mem += (letterAvg * i + delimAvg * (i - 1)) * boundedPermutations
+		permNo += round(boundedPermutations)
+	mem = (mem + permNo) * delimNo
+	return mem
+
+#display memory in human readable fromat
+def quantifyMemory(mem):
+	temp = float(mem)
+	x = 0
+	size = ['bytes', 'kB', 'MB', 'GB', 'TB']
+	while temp >= 1000 and x < 4:
+		temp /= 1000
+		x += 1
+	temp = round(temp, 2)
+	string = "[i] Additional memory required by permutations: \033[1;31m"+str(temp)+" "+size[x]+"\033[1;m\n"
+	string += "[i] This is a \033[1;31mrough approximation\033[1;m, real values may vary!"
+	return string
+
+#generic abort message
+def abortMessage():
+	abort = raw_input("[i]> Are you sure you want to \033[1;31mabort\033[1;m the program? You will only lose the permutations. Y/[N]: ").lower()
+	return abort
+
+#where the permutations are happening
+def permutationsFunction(array, minim):
+	array = set(filter(None, array))
+	elemNo = len(array)
+	if elemNo <= minim:
+		print "[!] No possible permutations can be made!"
+		return []
+	print "[i] List contains "+str(elemNo)+" elements.\n"
+	print "[i] Insert number of elements that will form the permutations"
+	print "[i] Numbers lower or equal to \033[1;31m"+str(minim)+"\033[1;m and higher then \033[1;31m"+str(elemNo)+"\033[1;m will be ignored"
+	elements = raw_input("> Please enter the numbers, separated by comma: ").split(',')
+	elements = set([ int(x) for x in elements if ( x.isdigit() and int(x) > minim and int(x) <= elemNo ) ])
+	while len(elements) == 0:
+		again = raw_input("[!]> The given input is invalid, try again? Y/[N]: ").lower()
+		if again == 'y':
+			elements = raw_input("> Please enter the numbers, separated by comma: ").split(',')
+			elements = set([ int(x) for x in elements if ( x.isdigit() and int(x) > minim and int(x) <= elemNo ) ])
+		else:
+			if abortMessage() == 'y':
+				return []
+
+	d = raw_input("> Insert special delimiters between words Y/[N]: ").lower()
+	if d == 'y':
+		delimiters = raw_input("> Please enter the characters/words, separated by semicolon(';'). [i.e. -;_;; ;,;_and_], spaces will NOT be removed: ").split(';')
+		#why semicolon? because it is less used then comma(',')
+		delimiters = set(delimiters)
+		if not( '' in delimiters ):
+			also = raw_input("> Also use default delimiter: None('') ? Y/[N]: ").lower()
+			if also == 'y':
+				delimiters = list(delimiters)+['']
+	else:
+		delimiters = ['']
+	global wcto
+	global wcfrom
+	print quantifyMemory(computePermutationMemory(array, elements, delimiters, wcfrom, wcto))
+	while True:
+		proceed = raw_input("> Do you wish to proceed generating and writing the permutations? Y/[N]: ").lower()
+		if proceed == 'y':
+			perm = []
+			for elem in elements:
+				for i in itertools.permutations(array, elem):
+					for delim in delimiters:
+						perm.append(delim.join(i))
+			return perm
+		else:
+			if abortMessage() == 'y':
+				return []
+	return []
+
+
+
 if len(sys.argv) < 2 or sys.argv[1] == '-h':
 	print " ___________ "
 	print " \033[07m  cupp.py! \033[27m                # Common"
@@ -132,7 +296,7 @@ if len(sys.argv) < 2 or sys.argv[1] == '-h':
 
 	print "	[ Options ]\r\n"
 	print "	-h	You are looking at it baby! :)"
-	print " 		 For more help take a look in "+cuppFolder+"/docs/README"
+	print " 		 For more help take a look in "+cuppFolder+"/README.md"
 	print "		 Global configuration file is "+cuppFolder+"/cupp.cfg"
 	if not( os.path.isfile(cuppFolder+'/cupp.cfg') ):
 		print "		 \033[1;31m"+cuppFolder+"/cupp.cfg is missing\033[1;m"
@@ -183,20 +347,33 @@ elif sys.argv[1] == '-w':
 
 	conts = raw_input("> Do you want to concatenate all words from wordlist? Y/[N]: ").lower()
 
-
-
 	if conts == "y" and linije > threshold:
 		print "\r\n[-] Maximum number of words for concatenation is "+str(threshold)
 		print "[-] Check configuration file for increasing this number.\r\n"
-		conts = raw_input("> Do you want to concatenate all words from wordlist? Y/[N]: ").lower()
+		conts = raw_input("> Are you sure you want to concatenate all words from wordlist? Y/[N]: ").lower()
 	conts = conts
 	cont = ['']
 	if conts == "y":
 		for cont1 in listica:
 			for cont2 in listica:
-				if listica.index(cont1) != listica.index(cont2):
-					cont.append(cont1+cont2)
+				#if cont1 != cont2:
+				#much faster then using index, but why use it at all?
+				cont.append(cont1+cont2)
 
+	if conts == 'y':
+		minim = 2
+	else:
+		minim = 1
+	permut = ['']
+	if len(listica) > minim:  
+		perm = raw_input("> Do you wish to make permutations of groups of words from wordlist? Y/[N]: ").lower()
+		if perm == "y" and linije > threshold:
+			print "\r\n[-] Maximum number of words for permutation is "+str(threshold)
+			print "[-] Check configuration file for increasing this number.\r\n"
+			perm = raw_input("> Are you sure you want to make permutations of all words from wordlist? Y/[N]: ").lower()
+		if perm == 'y':
+			permut = permutationsFunction(listica, minim)
+	
 	spechars = ['']
 	spechars1 = raw_input("> Do you want to add special chars at the end of words? Y/[N]: ").lower()
 	if spechars1 == "y":
@@ -209,7 +386,6 @@ elif sys.argv[1] == '-w':
 
 	randnum = raw_input("> Do you want to add some random numbers at the end of words? Y/[N]:").lower()
 	leetmode = raw_input("> Leet mode? (i.e. leet = 1337) Y/[N]: ").lower()
-
 
 	kombinacija1 = list(komb(listica, years))
 	kombinacija2 = ['']
@@ -240,8 +416,9 @@ elif sys.argv[1] == '-w':
 	komb_unique6 = dict.fromkeys(kombinacija6).keys()
 	komb_unique7 = dict.fromkeys(listica).keys()
 	komb_unique8 = dict.fromkeys(cont).keys()
+	komb_unique9 = dict.fromkeys(permut).keys()
 
-	uniqlist = komb_unique1+komb_unique2+komb_unique3+komb_unique4+komb_unique5+komb_unique6+komb_unique7+komb_unique8
+	uniqlist = komb_unique1+komb_unique2+komb_unique3+komb_unique4+komb_unique5+komb_unique6+komb_unique7+komb_unique8+komb_unique9
 
 	unique_lista = dict.fromkeys(uniqlist).keys()
 	unique_leet = []
@@ -333,7 +510,6 @@ elif sys.argv[1] == '-i':
 
 	randnum = raw_input("> Do you want to add some random numbers at the end of words? Y/[N]:").lower()
 	leetmode = raw_input("> Leet mode? (i.e. leet = 1337) Y/[N]: ").lower()
-
 
 	print "\r\n[+] Now making a dictionary..."
 
